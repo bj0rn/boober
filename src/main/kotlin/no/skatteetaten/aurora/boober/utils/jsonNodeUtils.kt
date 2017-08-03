@@ -4,6 +4,22 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 
 
+fun JsonNode?.asOptionalString(): String? = if (this != null && this.isValueNode) this.asText() else null
+
+
+fun JsonNode?.asMap(): Map<String, JsonNode> {
+    if (this == null) {
+        return emptyMap()
+    }
+
+    if (this is ObjectNode) {
+        val fields = java.util.HashMap<String, JsonNode>()
+        this.fields().forEachRemaining { entry -> fields.put(entry.key, entry.value) }
+        return fields
+    }
+    return emptyMap()
+}
+
 fun JsonNode.findAllPointers(maxLevel: Int): List<String> {
 
     fun inner(root: String, node: ObjectNode): List<String> {

@@ -61,6 +61,7 @@ dependencies {
       'com.github.fge:json-patch:1.9',
       'com.github.martinwithaar:encryptor4j:0.1',
       'com.github.ben-manes.caffeine:caffeine:2.3.5',
+      "org.jetbrains.kotlinx:kotlinx-coroutines-core:0.17"
 
   )
 

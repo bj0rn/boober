@@ -31,6 +31,41 @@ class OpenShiftResourceClient(@Value("\${openshift.url}") val baseUrl: String,
         return exchange(RequestEntity<JsonNode>(payload, headers, HttpMethod.PUT, URI(urls.update)))
     }
 
+    fun list(kind: String, namespace: String, labels: Map<String, String>): List<JsonNode> {
+
+        val labelkeys = labels.map {
+            "${it.key}%3D${it.value}"
+        }
+
+
+        val labelSelector = if (labelkeys.size == 1) labelkeys[0] else labelkeys.joinToString { "," }
+
+        return list(kind, namespace, labelSelector)
+
+    }
+
+    fun list(kind: String, namespace: String, labelSelector: String? = null): List<JsonNode> {
+        val urls: OpenShiftApiUrls = OpenShiftApiUrls.createOpenShiftApiUrls(baseUrl, kind, null, namespace)
+
+        val url = labelSelector?.let {
+            "${urls.create}?labelSelector=$labelSelector"
+        } ?: urls.create
+
+        val headers: HttpHeaders = getAuthorizationHeaders()
+
+        try {
+            val res = exchange(RequestEntity<Any>(headers, HttpMethod.GET, URI(url)))
+
+            return res.body["items"].toList()
+
+        } catch(e: OpenShiftException) {
+            if (e.cause is HttpClientErrorException && e.cause.statusCode == HttpStatus.NOT_FOUND) {
+                return emptyList()
+            }
+            throw e
+        }
+    }
+
     fun get(kind: String, name: String, namespace: String): ResponseEntity<JsonNode>? {
         val urls: OpenShiftApiUrls = OpenShiftApiUrls.createOpenShiftApiUrls(baseUrl, kind, name, namespace)
         if (urls.get == null) {
