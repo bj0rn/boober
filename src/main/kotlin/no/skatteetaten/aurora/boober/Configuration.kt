@@ -15,12 +15,17 @@ import org.encryptor4j.factory.KeyFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Primary
+import org.springframework.http.MediaType
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
 import org.springframework.web.client.RestTemplate
 import java.security.cert.X509Certificate
+import java.util.*
+
 
 @Configuration
 class Configuration {
+
 
     @Bean
     @Primary
@@ -65,6 +70,17 @@ class Configuration {
             httpClient = createSslTrustAllHttpClient()
         }
 
-        return RestTemplate(clientHttpRequestFactory)
+        val myRest = RestTemplate(clientHttpRequestFactory)
+
+        for (myConverter in myRest.messageConverters) {
+            if (myConverter is MappingJackson2HttpMessageConverter) {
+                val myMediaTypes = ArrayList<MediaType>()
+                myMediaTypes.addAll(myConverter.getSupportedMediaTypes())
+                myMediaTypes.add(MediaType.parseMediaType("application/vnd.docker.distribution.manifest.v1+prettyjws"))
+                myConverter.supportedMediaTypes = myMediaTypes
+            }
+        }
+        return myRest
+
     }
 }

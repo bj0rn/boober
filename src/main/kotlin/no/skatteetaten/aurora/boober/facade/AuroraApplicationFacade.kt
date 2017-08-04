@@ -1,8 +1,14 @@
 package no.skatteetaten.aurora.boober.facade
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.ArrayNode
+import io.prometheus.client.Gauge
 import no.skatteetaten.aurora.boober.model.AuroraApplication
+import no.skatteetaten.aurora.boober.model.AuroraImageStream
 import no.skatteetaten.aurora.boober.model.AuroraPod
+import no.skatteetaten.aurora.boober.service.AuroraStatusCalculator
+import no.skatteetaten.aurora.boober.service.DockerService
 import no.skatteetaten.aurora.boober.service.openshift.OpenShiftResourceClient
 import no.skatteetaten.aurora.boober.utils.asMap
 import no.skatteetaten.aurora.boober.utils.asOptionalString
@@ -13,7 +19,9 @@ import org.springframework.web.client.RestClientException
 import org.springframework.web.client.RestTemplate
 
 @Service
-class AuroraApplicationFacade(val client: OpenShiftResourceClient, val restTemplate: RestTemplate) {
+class AuroraApplicationFacade(val client: OpenShiftResourceClient,
+                              val restTemplate: RestTemplate,
+                              val dockerService: DockerService, val mapper: ObjectMapper) {
 
     val logger: Logger = LoggerFactory.getLogger(AuroraApplicationFacade::class.java)
 
@@ -36,6 +44,9 @@ class AuroraApplicationFacade(val client: OpenShiftResourceClient, val restTempl
             val phase = getDeploymentPhase(name, namespace, versionNumber)
             val route = getRouteUrls(namespace, name)
 
+
+            //val auroraIs = getAuroraImageStream(it, name, namespace)
+
             AuroraApplication(
                     name = name,
                     namespace = namespace,
@@ -46,8 +57,8 @@ class AuroraApplicationFacade(val client: OpenShiftResourceClient, val restTempl
                     routeUrl = route,
                     managementPath = managementPath,
                     pods = pods,
+                    //  imageStream = auroraIs,
                     sprocketDone = annotations["sprocket.sits.no-deployment-config.done"].asOptionalString()
-                    //fetch version from prometheus
             )
 
 
@@ -60,6 +71,34 @@ class AuroraApplicationFacade(val client: OpenShiftResourceClient, val restTempl
         //get management endpoints from applications if managementInterface is present
 
         //if prometheus status reason is HEALTH_CHECK_FAILED fetch health endpoints from pods
+
+    }
+
+    fun getAuroraImageStream(dc: JsonNode, name: String, namespace: String): AuroraImageStream? {
+        //todo search for it instead of just use 0
+
+        val triggerFrom = dc.at("/spec/triggers/0/imageChangeParams/from")
+        val kind = triggerFrom["kind"].asOptionalString()
+        if (kind != "ImageStreamTag") {
+            return null
+        }
+
+        val deployTag = triggerFrom["name"].asText().split(":")[1]
+
+        return client.get("imagestream", name, namespace)?.body?.let {
+            val tags = it.at("/spec/tags") as ArrayNode
+            val dockerUrl = tags.filter {
+                it["name"].asText() == deployTag
+            }.map {
+                it["from"]["name"].asText()
+            }.first()
+
+            val (registryUrl, group, nameAndTag) = dockerUrl.split("/")
+            val (name, tag) = nameAndTag.split(":")
+
+            AuroraImageStream(deployTag, registryUrl, group, name, tag)
+        }
+
 
     }
 
@@ -148,8 +187,7 @@ class AuroraApplicationFacade(val client: OpenShiftResourceClient, val restTempl
 
     private fun findManagementEndpoints(podIP: String, managementPath: String): Map<String, String> {
 
-        // val managementUrl = "http://${podIP}$managementPath"
-        val managementUrl = "http://localhost:3000/actuator"
+        val managementUrl = "http://${podIP}$managementPath"
 
         val managementEndpoints = try {
             restTemplate.getForObject(managementUrl, JsonNode::class.java)
@@ -164,4 +202,18 @@ class AuroraApplicationFacade(val client: OpenShiftResourceClient, val restTempl
         return managementEndpoints["_links"].asMap().mapValues { it.value["href"].asText() }
 
     }
+
+    fun calculateHealth(app: AuroraApplication, gauge: Gauge) {
+
+        //denne må bli gjort for hver app
+        val status = AuroraStatusCalculator.calculateStatus(app.pods, app.deploymentPhase, app.targetReplicas, app.availableReplicas)
+
+        val auroraVersion = app.pods[0].info?.at("auroraVersion")?.asText() ?: "Unknown"
+        gauge.labels(app.name, app.namespace, auroraVersion, status.comment)
+                .set(status.level.level.toDouble())
+
+
+    }
+
+
 }

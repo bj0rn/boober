@@ -12,6 +12,7 @@ import no.skatteetaten.aurora.boober.model.Permissions
 import no.skatteetaten.aurora.boober.model.Route
 import no.skatteetaten.aurora.boober.model.TemplateType
 
+
 val auroraDcDevelopment = AuroraDeploymentConfigDeploy(
         schemaVersion = "v1",
         affiliation = "aurora",
