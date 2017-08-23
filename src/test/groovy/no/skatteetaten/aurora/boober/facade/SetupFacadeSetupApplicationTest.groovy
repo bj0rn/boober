@@ -147,7 +147,7 @@ class SetupFacadeSetupApplicationTest extends Specification {
 
     when:
 
-      def res = setupFacade.executeSetup(affiliation, new SetupParams([ENV_NAME], [APP_NAME], []))
+      def res = setupFacade.executeSetup(affiliation, new SetupParams([aid], []))
 
     then:
       def responses = res[0].openShiftResponses

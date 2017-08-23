@@ -101,7 +101,7 @@ class SetupFacade(
 
     fun getDeployCommands(affiliation: String, setupParams: SetupParams, git: Git? = null): LinkedList<ApplicationCommand> {
 
-        val appIds: List<DeployCommand> = setupParams.applicationIds
+        val appIds: List<DeployCommand> = setupParams.deployCommands
                 .takeIf { it.isNotEmpty() } ?: throw IllegalArgumentException("Specify applicationId")
 
         val repo = git ?: gitService.checkoutRepoForAffiliation(affiliation)

@@ -1,9 +1,9 @@
 {
     "affiliation": "paas",
     "setupParams": {
-        "apps": ["refapp"],
-      "envs": [
-        "boober-utv", "boober-test"
+      "applicationIds": [
+        {"environment": "boober-utv", "application": "refapp"},
+        {"environment": "boober-test", "application": "refapp"}
       ]
     }
 }
