@@ -2,12 +2,7 @@ package no.skatteetaten.aurora.boober.mapper.v1
 
 import no.skatteetaten.aurora.boober.mapper.AuroraConfigFieldHandler
 import no.skatteetaten.aurora.boober.mapper.AuroraConfigFields
-import no.skatteetaten.aurora.boober.model.AuroraConfig
-import no.skatteetaten.aurora.boober.model.AuroraDeploymentConfig
-import no.skatteetaten.aurora.boober.model.AuroraDeploymentConfigProcessTemplate
-import no.skatteetaten.aurora.boober.model.AuroraSecretVault
-import no.skatteetaten.aurora.boober.model.DeployCommand
-import no.skatteetaten.aurora.boober.model.TemplateType
+import no.skatteetaten.aurora.boober.model.*
 import no.skatteetaten.aurora.boober.service.openshift.OpenShiftClient
 
 class AuroraConfigMapperV1Template(
@@ -16,6 +11,10 @@ class AuroraConfigMapperV1Template(
         openShiftClient: OpenShiftClient,
         secretVaultService: Map<String, AuroraSecretVault>
 ) : AuroraConfigMapperV1(aid, auroraConfig, openShiftClient, secretVaultService) {
+    override fun extractDeploy() = null
+
+    override fun extractBuild() = null
+
 
     val handlers = listOf(
             AuroraConfigFieldHandler("template", validator = { json ->
@@ -33,7 +32,13 @@ class AuroraConfigMapperV1Template(
     )
 
     override val fieldHandlers = v1Handlers + handlers + parameterHandlers
-    override val auroraConfigFields = AuroraConfigFields.create(fieldHandlers, applicationFiles)
+
+    override fun extractTemplate(): AuroraTemplate? {
+        return AuroraTemplate(
+                parameters = auroraConfigFields.getParameters(parameterHandlers),
+                template = auroraConfigFields.extract("template")
+        )
+    }
 
     override fun toAuroraDeploymentConfig(): AuroraDeploymentConfig {
 

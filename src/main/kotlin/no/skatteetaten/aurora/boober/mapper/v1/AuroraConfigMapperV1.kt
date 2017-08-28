@@ -2,14 +2,9 @@ package no.skatteetaten.aurora.boober.mapper.v1
 
 import com.fasterxml.jackson.databind.JsonNode
 import no.skatteetaten.aurora.boober.mapper.AuroraConfigFieldHandler
+import no.skatteetaten.aurora.boober.mapper.AuroraConfigFields
 import no.skatteetaten.aurora.boober.mapper.AuroraConfigMapper
-import no.skatteetaten.aurora.boober.model.AuroraConfig
-import no.skatteetaten.aurora.boober.model.AuroraConfigFile
-import no.skatteetaten.aurora.boober.model.AuroraSecretVault
-import no.skatteetaten.aurora.boober.model.DeployCommand
-import no.skatteetaten.aurora.boober.model.MountType
-import no.skatteetaten.aurora.boober.model.Probe
-import no.skatteetaten.aurora.boober.model.Route
+import no.skatteetaten.aurora.boober.model.*
 import no.skatteetaten.aurora.boober.service.internal.AuroraConfigException
 import no.skatteetaten.aurora.boober.service.openshift.OpenShiftClient
 import no.skatteetaten.aurora.boober.utils.findAllPointers
@@ -39,6 +34,7 @@ abstract class AuroraConfigMapperV1(
     val dbHandlers = findDbHandlers(applicationFiles)
     val mountHandlers = findMounts(applicationFiles)
     val routeHandlers = findRouteHandlers(applicationFiles)
+
     val v1Handlers = baseHandlers + dbHandlers + routeHandlers + configHandlers + mountHandlers + listOf(
             AuroraConfigFieldHandler("affiliation", validator = { it.pattern("^[a-z]{0,23}[a-z]$", "Affiliation is must be alphanumeric and under 24 characters") }),
             AuroraConfigFieldHandler("cluster", validator = { it.notBlank("Cluster must be set") }),
@@ -53,6 +49,9 @@ abstract class AuroraConfigMapperV1(
             AuroraConfigFieldHandler("secretVault", validator = validateSecrets()),
             AuroraConfigFieldHandler("releaseTo")
     )
+
+    override val auroraConfigFields = AuroraConfigFields.create(fieldHandlers, applicationFiles)
+
 
 
     fun getUnmappedPointers(): Map<String, List<String>> {
@@ -231,4 +230,39 @@ abstract class AuroraConfigMapperV1(
             }
         }
     }
+
+    fun toADC(): ADC {
+
+        val name = auroraConfigFields.extract("name")
+
+        return ADC(
+                schemaVersion = auroraConfigFields.extract("schemaVersion"),
+                affiliation = auroraConfigFields.extract("affiliation"),
+                cluster = auroraConfigFields.extract("cluster"),
+                type = auroraConfigFields.extract("type", { TemplateType.valueOf(it.textValue()) }),
+                name = name,
+                envName = auroraConfigFields.extractOrDefault("envName", deployCommand.applicationId.environment),
+                releaseTo = auroraConfigFields.extractOrNull("releaseTo"),
+                permissions = extractPermissions(),
+                secrets = extractSecret(),
+                config = auroraConfigFields.getConfigMap(configHandlers),
+                route = getRoute(name),
+                mounts = auroraConfigFields.getMounts(mountHandlers, vaults),
+                fields = auroraConfigFields.fields,
+                unmappedPointers = getUnmappedPointers(),
+                applicationFile = applicationFile.name,
+                overrideFiles = overrideFiles,
+                template = extractTemplate(),
+                build = extractBuild(),
+                deploy = extractDeploy()
+        )
+
+
+    }
+
+    abstract fun extractDeploy(): AuroraDeploy?
+
+    abstract fun extractBuild(): AuroraBuild?
+
+    abstract fun extractTemplate(): AuroraTemplate?
 }

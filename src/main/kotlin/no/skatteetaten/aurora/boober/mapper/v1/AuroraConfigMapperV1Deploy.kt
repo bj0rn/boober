@@ -3,28 +3,23 @@ package no.skatteetaten.aurora.boober.mapper.v1
 import com.fasterxml.jackson.databind.JsonNode
 import no.skatteetaten.aurora.boober.mapper.AuroraConfigFieldHandler
 import no.skatteetaten.aurora.boober.mapper.AuroraConfigFields
-import no.skatteetaten.aurora.boober.model.AuroraConfig
-import no.skatteetaten.aurora.boober.model.AuroraDeploymentConfig
-import no.skatteetaten.aurora.boober.model.AuroraDeploymentConfigDeploy
-import no.skatteetaten.aurora.boober.model.AuroraDeploymentConfigFlags
-import no.skatteetaten.aurora.boober.model.AuroraDeploymentConfigResource
-import no.skatteetaten.aurora.boober.model.AuroraDeploymentConfigResources
-import no.skatteetaten.aurora.boober.model.AuroraSecretVault
-import no.skatteetaten.aurora.boober.model.DeployCommand
-import no.skatteetaten.aurora.boober.model.HttpEndpoint
-import no.skatteetaten.aurora.boober.model.TemplateType
-import no.skatteetaten.aurora.boober.model.Webseal
+import no.skatteetaten.aurora.boober.model.*
 import no.skatteetaten.aurora.boober.service.openshift.OpenShiftClient
 import no.skatteetaten.aurora.boober.utils.length
 import no.skatteetaten.aurora.boober.utils.notBlank
 
 
-class AuroraConfigMapperV1Deploy(
+open class AuroraConfigMapperV1Deploy(
         aid: DeployCommand,
         auroraConfig: AuroraConfig,
         openShiftClient: OpenShiftClient,
         vaults: Map<String, AuroraSecretVault>
 ) : AuroraConfigMapperV1(aid, auroraConfig, openShiftClient, vaults) {
+
+
+    override fun extractBuild() = null
+
+    override fun extractTemplate() = null
 
     val handlers = listOf(
             AuroraConfigFieldHandler("flags/cert", defaultValue = "false"),
@@ -57,7 +52,60 @@ class AuroraConfigMapperV1Deploy(
     )
 
     override val fieldHandlers = v1Handlers + handlers
-    override val auroraConfigFields = AuroraConfigFields.create(fieldHandlers, applicationFiles)
+
+
+    override fun extractDeploy(): AuroraDeploy? {
+        val name = auroraConfigFields.extract("name")
+        val certFlag = auroraConfigFields.extract("flags/cert", { it.asText() == "true" })
+        val groupId = auroraConfigFields.extract("groupId")
+        val certificateCnDefault = if (certFlag) "$groupId.$name" else null
+
+        return AuroraDeploy(
+                flags = AuroraDeploymentConfigFlags(
+                        certFlag,
+                        auroraConfigFields.extract("flags/debug", { it.asText() == "true" }),
+                        auroraConfigFields.extract("flags/alarm", { it.asText() == "true" }),
+                        auroraConfigFields.extract("flags/rolling", { it.asText() == "true" })
+
+                ),
+                resources = AuroraDeploymentConfigResources(
+                        memory = AuroraDeploymentConfigResource(
+                                min = auroraConfigFields.extract("resources/memory/min"),
+                                max = auroraConfigFields.extract("resources/memory/max")
+                        ),
+                        cpu = AuroraDeploymentConfigResource(
+                                min = auroraConfigFields.extract("resources/cpu/min"),
+                                max = auroraConfigFields.extract("resources/cpu/max")
+                        )
+                ),
+                replicas = auroraConfigFields.extract("replicas", JsonNode::asInt),
+                groupId = groupId,
+                artifactId = auroraConfigFields.extract("artifactId"),
+                version = auroraConfigFields.extract("version"),
+                splunkIndex = auroraConfigFields.extractOrNull("splunkIndex"),
+                database = auroraConfigFields.getDatabases(dbHandlers),
+
+                certificateCn = auroraConfigFields.extractOrDefault("certificateCn", certificateCnDefault),
+
+                webseal = auroraConfigFields.findAll("webseal", {
+                    Webseal(
+                            auroraConfigFields.extract("webseal/host"),
+                            auroraConfigFields.extractOrNull("webseal/roles")
+                    )
+                }),
+
+                prometheus = auroraConfigFields.findAll("prometheus", {
+                    HttpEndpoint(
+                            auroraConfigFields.extract("prometheus/path"),
+                            auroraConfigFields.extractOrNull("prometheus/port", JsonNode::asInt)
+                    )
+                }),
+                managementPath = auroraConfigFields.extractOrNull("managementPath"),
+                liveness = getProbe("liveness"),
+                readiness = getProbe("readiness")!!
+        )
+    }
+
 
     override fun toAuroraDeploymentConfig(): AuroraDeploymentConfig {
 
