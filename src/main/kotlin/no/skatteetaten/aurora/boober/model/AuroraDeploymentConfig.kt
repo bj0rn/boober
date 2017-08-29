@@ -8,7 +8,13 @@ enum class TemplateType {
     deploy, development, localTemplate, template, build
 }
 
-data class ADC(
+data class AuroraTemplateDeploy(
+        val application: AuroraApplicationConfig,
+        val dc: ADC,
+        val deploy: AuroraDeploy
+)
+
+data class AuroraApplicationConfig(
         val schemaVersion: String,
         val affiliation: String,
         val cluster: String,
@@ -19,17 +25,11 @@ data class ADC(
         val fields: Map<String, AuroraConfigField>,
         val unmappedPointers: Map<String, List<String>>,
 
-        val secrets: Map<String, String>?,
-        val config: Map<String, String>,
-        val route: List<Route>,
-        val mounts: List<Mount>?,
-        val releaseTo: String?,
-        val applicationFile: String,
-        val overrideFiles: Map<String, JsonNode>,
 
-        val build:AuroraBuild? = null,
-        val deploy:AuroraDeploy? = null,
-        val template:AuroraTemplate? = null
+        val dc: ADC? = null,
+        val build: AuroraBuild? = null,
+        val deploy: AuroraDeploy? = null,
+        val template: AuroraTemplate? = null
 ) {
 
     val namespace: String
@@ -37,17 +37,28 @@ data class ADC(
 
     //In use in velocity template
     val routeName: String?
-        get() =
-            if (route.isEmpty()) {
+        get() = dc?.let {
+            if (it.route.isEmpty()) {
                 null
             } else {
-                route.first().let {
+                it.route.first().let {
                     val host = it.host ?: "$name-$namespace"
                     "http://$host.$cluster.paas.skead.no${it.path ?: ""}"
+                }
                 }
             }
 
 }
+
+data class ADC(
+        val secrets: Map<String, String>?,
+        val config: Map<String, String>,
+        val route: List<Route>,
+        val mounts: List<Mount>?,
+        val releaseTo: String?,
+        val applicationFile: String,
+        val overrideFiles: Map<String, JsonNode>
+)
 
 data class AuroraBuild(
         val baseName: String,
@@ -86,16 +97,11 @@ data class AuroraDeploy(
 }
 
 
-
 data class AuroraTemplate(
         val parameters: Map<String, String>?,
         val templateJson: JsonNode? = null,
         val template: String? = null
 )
-
-
-
-
 
 
 interface AuroraDeploymentConfig {
@@ -133,7 +139,6 @@ interface AuroraDeploymentConfig {
 }
 
 
-
 enum class MountType {
     ConfigMap, Secret
 }
@@ -162,8 +167,6 @@ data class Database(
 }
 
 data class Probe(val path: String? = null, val port: Int, val delay: Int, val timeout: Int)
-
-
 
 
 data class AuroraDeploymentConfigDeploy(

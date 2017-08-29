@@ -4,7 +4,19 @@ import com.fasterxml.jackson.databind.JsonNode
 import no.skatteetaten.aurora.boober.mapper.AuroraConfigFieldHandler
 import no.skatteetaten.aurora.boober.mapper.AuroraConfigFields
 import no.skatteetaten.aurora.boober.mapper.AuroraConfigMapper
-import no.skatteetaten.aurora.boober.model.*
+import no.skatteetaten.aurora.boober.model.ADC
+import no.skatteetaten.aurora.boober.model.AuroraApplicationConfig
+import no.skatteetaten.aurora.boober.model.AuroraBuild
+import no.skatteetaten.aurora.boober.model.AuroraConfig
+import no.skatteetaten.aurora.boober.model.AuroraConfigFile
+import no.skatteetaten.aurora.boober.model.AuroraDeploy
+import no.skatteetaten.aurora.boober.model.AuroraSecretVault
+import no.skatteetaten.aurora.boober.model.AuroraTemplate
+import no.skatteetaten.aurora.boober.model.DeployCommand
+import no.skatteetaten.aurora.boober.model.MountType
+import no.skatteetaten.aurora.boober.model.Probe
+import no.skatteetaten.aurora.boober.model.Route
+import no.skatteetaten.aurora.boober.model.TemplateType
 import no.skatteetaten.aurora.boober.service.internal.AuroraConfigException
 import no.skatteetaten.aurora.boober.service.openshift.OpenShiftClient
 import no.skatteetaten.aurora.boober.utils.findAllPointers
@@ -231,30 +243,34 @@ abstract class AuroraConfigMapperV1(
         }
     }
 
-    fun toADC(): ADC {
+    fun toAuroraApplicationConfig(): AuroraApplicationConfig {
 
         val name = auroraConfigFields.extract("name")
 
-        return ADC(
+        val adc = ADC(
+                releaseTo = auroraConfigFields.extractOrNull("releaseTo"),
+                secrets = extractSecret(),
+                config = auroraConfigFields.getConfigMap(configHandlers),
+                route = getRoute(name),
+                mounts = auroraConfigFields.getMounts(mountHandlers, vaults),
+                applicationFile = applicationFile.name,
+                overrideFiles = overrideFiles
+        )
+
+        return AuroraApplicationConfig(
                 schemaVersion = auroraConfigFields.extract("schemaVersion"),
                 affiliation = auroraConfigFields.extract("affiliation"),
                 cluster = auroraConfigFields.extract("cluster"),
                 type = auroraConfigFields.extract("type", { TemplateType.valueOf(it.textValue()) }),
                 name = name,
                 envName = auroraConfigFields.extractOrDefault("envName", deployCommand.applicationId.environment),
-                releaseTo = auroraConfigFields.extractOrNull("releaseTo"),
                 permissions = extractPermissions(),
-                secrets = extractSecret(),
-                config = auroraConfigFields.getConfigMap(configHandlers),
-                route = getRoute(name),
-                mounts = auroraConfigFields.getMounts(mountHandlers, vaults),
                 fields = auroraConfigFields.fields,
                 unmappedPointers = getUnmappedPointers(),
-                applicationFile = applicationFile.name,
-                overrideFiles = overrideFiles,
                 template = extractTemplate(),
                 build = extractBuild(),
-                deploy = extractDeploy()
+                deploy = extractDeploy(),
+                dc = adc
         )
 
 
